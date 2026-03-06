@@ -19,8 +19,6 @@
   (eprintln (str "Unknown command: " command))
   (System/exit 1))
 
-(defmethod  run-command "init" [_])
-
 (defmethod run-command "init" [_]
   (if (fs/exists? mgit-dir-path)
     (println (str mgit-dir-path " already exists"))
