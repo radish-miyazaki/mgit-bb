@@ -32,11 +32,12 @@
       (fs/create-file (fs/path heads-dir-path "master"))
       (println (str "Initialized empty mgit repository in " mgit-dir-path)))))
 
-(defn -main []
-  (when (empty? *command-line-args*)
+(defn -main [& args]
+  (when (empty? args)
     (eprintln "Usage: mgit <command> [<args>]")
     (System/exit 1))
-  (let [command (first *command-line-args*)]
+  (let [command (first args)]
     (run-command command)))
 
-(-main)
+(when (= *file* (System/getProperty "babashka.file"))
+  (apply -main *command-line-args*))
