@@ -3,7 +3,8 @@
          '[clojure.string :as str])
 (import '[java.security MessageDigest]
         '[java.util.zip DeflaterOutputStream]
-        '[java.io ByteArrayOutputStream])
+        '[java.io ByteArrayOutputStream]
+        '[java.nio.charset StandardCharsets])
 
 (def mgit-dir (fs/path ".mgit"))
 (def objects-dir (fs/path mgit-dir "objects"))
@@ -18,7 +19,7 @@
 
 (defn- sha1 [data]
   (let [digest (MessageDigest/getInstance "SHA-1")]
-    (.update digest (.getBytes data))
+    (.update digest (.getBytes data StandardCharsets/UTF_8))
     (let [hash-bytes (.digest digest)]
       (apply str (map #(format "%02x" %) hash-bytes)))))
 
@@ -32,7 +33,7 @@
   (let [hash (sha1 data)
         obj-path (fs/path objects-dir hash)]
     (when-not (fs/exists? obj-path)
-      (fs/write-bytes obj-path (zlib-compress (.getBytes data))))
+      (fs/write-bytes obj-path (zlib-compress (.getBytes data StandardCharsets/UTF_8))))
     hash))
 
 (defn- read-index []
@@ -51,7 +52,7 @@
 (defmulti dispatch-command (fn [command _] command))
 
 (defmethod dispatch-command :default
-  [command]
+  [command _]
   (eprintln (str "Unknown command: " command))
   (System/exit 1))
 
@@ -61,7 +62,7 @@
     (do
       (doseq [path [mgit-dir objects-dir refs-dir heads-dir]]
         (fs/create-dirs path))
-      (fs/write-lines head-file ["ref: refs/heads/master\n"])
+      (fs/write-lines head-file ["ref: refs/heads/master"])
       (fs/create-file index-file)
       (fs/create-file (fs/path heads-dir "master"))
       (println (str "Initialized empty mgit repository in " mgit-dir)))))
