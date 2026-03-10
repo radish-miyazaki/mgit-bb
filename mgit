@@ -5,39 +5,39 @@
         '[java.util.zip DeflaterOutputStream]
         '[java.io ByteArrayOutputStream])
 
-(def mgit-dir-path (fs/path ".mgit"))
-(def objects-dir-path (fs/path mgit-dir-path "objects"))
-(def refs-dir-path (fs/path mgit-dir-path "refs"))
-(def heads-dir-path (fs/path refs-dir-path "heads"))
-(def head-file-path (fs/path mgit-dir-path "HEAD"))
-(def index-file-path (fs/path mgit-dir-path "index"))
+(def mgit-dir (fs/path ".mgit"))
+(def objects-dir (fs/path mgit-dir "objects"))
+(def refs-dir (fs/path mgit-dir "refs"))
+(def heads-dir (fs/path refs-dir "heads"))
+(def head-file (fs/path mgit-dir "HEAD"))
+(def index-file (fs/path mgit-dir "index"))
 
 (defn- eprintln [& args]
   (binding [*out* *err*]
     (apply println args)))
 
-(defn- sha1-hash [data]
+(defn- sha1 [data]
   (let [digest (MessageDigest/getInstance "SHA-1")]
     (.update digest (.getBytes data))
     (let [hash-bytes (.digest digest)]
       (apply str (map #(format "%02x" %) hash-bytes)))))
 
-(defn- compress-zlib [data]
+(defn- zlib-compress [data]
   (let [boas (ByteArrayOutputStream.)]
     (with-open [dos (DeflaterOutputStream. boas)]
       (.write dos data))
     (.toByteArray boas)))
 
-(defn- hash-object [data]
-  (let [hash (sha1-hash data)
-        obj-path (fs/path objects-dir-path hash)]
-    (if (fs/exists? obj-path)
-      hash
-      (fs/write-bytes obj-path (compress-zlib (.getBytes data))))))
+(defn- write-object [data]
+  (let [hash (sha1 data)
+        obj-path (fs/path objects-dir hash)]
+    (when-not (fs/exists? obj-path)
+      (fs/write-bytes obj-path (zlib-compress (.getBytes data))))
+    hash))
 
 (defn- read-index []
-  (if (fs/exists? index-file-path)
-    (->> (fs/read-all-lines index-file-path)
+  (if (fs/exists? index-file)
+    (->> (fs/read-all-lines index-file)
          (remove str/blank?)
          (into {} (map #(let [[path hash] (str/split % #"\s+")]
                           [path hash]))))
@@ -45,34 +45,34 @@
 
 (defn- write-index [index]
   (fs/write-lines
-   index-file-path
+   index-file
    (map (fn [[path hash]] (str path " " hash)) index)))
 
-(defmulti run-command (fn [command _] command))
+(defmulti dispatch-command (fn [command _] command))
 
-(defmethod run-command :default
+(defmethod dispatch-command :default
   [command]
   (eprintln (str "Unknown command: " command))
   (System/exit 1))
 
-(defmethod run-command "init" [_ _]
-  (if (fs/exists? mgit-dir-path)
-    (println (str mgit-dir-path " already exists"))
+(defmethod dispatch-command "init" [_ _]
+  (if (fs/exists? mgit-dir)
+    (println (str mgit-dir " already exists"))
     (do
-      (doseq [path [mgit-dir-path objects-dir-path refs-dir-path heads-dir-path]]
+      (doseq [path [mgit-dir objects-dir refs-dir heads-dir]]
         (fs/create-dirs path))
-      (fs/write-lines head-file-path ["ref: refs/heads/master\n"])
-      (fs/create-file index-file-path)
-      (fs/create-file (fs/path heads-dir-path "master"))
-      (println (str "Initialized empty mgit repository in " mgit-dir-path)))))
+      (fs/write-lines head-file ["ref: refs/heads/master\n"])
+      (fs/create-file index-file)
+      (fs/create-file (fs/path heads-dir "master"))
+      (println (str "Initialized empty mgit repository in " mgit-dir)))))
 
-(defmethod run-command "add" [_ args]
+(defmethod dispatch-command "add" [_ args]
   (if (empty? args)
     (println "Usage: mgit add <filename>")
     (let [fname (first args)]
       (if (fs/exists? fname)
         (let [data (str/join "\n" (fs/read-all-lines fname))
-              hash (hash-object data)
+              hash (write-object data)
               index (read-index)
               new-index (assoc index fname hash)]
           (write-index new-index)
@@ -85,7 +85,7 @@
     (System/exit 1))
   (let [command (first args)
         sub-args (rest args)]
-    (run-command command sub-args)))
+    (dispatch-command command sub-args)))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (apply -main *command-line-args*))
