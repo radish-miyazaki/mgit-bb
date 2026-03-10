@@ -13,15 +13,19 @@ and references the Erlang (escript) implementation [radish-miyazaki/mgit-escript
 ## Features
 
 - `init` - Initialize a new mgit repository (creates `.mgit` directory with `objects`, `refs/heads`, `HEAD`, and `index`)
+- `add <filename>` - Stage a file to the index (computes SHA-1 hash, stores the object, and updates the index)
 
 ## Usage
 
 ```sh
 # Make the script executable
-chmod +x script.clj
+chmod +x mgit
 
 # Initialize a repository
-./script.clj init
+./mgit init
+
+# Stage a file
+./mgit add <filename>
 ```
 
 ## Repository Structure
