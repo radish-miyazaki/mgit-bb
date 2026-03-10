@@ -14,6 +14,7 @@ and references the Erlang (escript) implementation [radish-miyazaki/mgit-escript
 
 - `init` - Initialize a new mgit repository (creates `.mgit` directory with `objects`, `refs/heads`, `HEAD`, and `index`)
 - `add <filename>` - Stage a file to the index (computes SHA-1 hash, stores the object, and updates the index)
+- `commit <message>` - Create a commit from the current index (stores tree, parent, and message as an object, and updates the branch reference)
 
 ## Usage
 
@@ -26,6 +27,9 @@ chmod +x mgit
 
 # Stage a file
 ./mgit add <filename>
+
+# Create a commit
+./mgit commit "initial commit"
 ```
 
 ## Repository Structure

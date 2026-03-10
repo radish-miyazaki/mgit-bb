@@ -7,6 +7,8 @@
         '[java.io ByteArrayOutputStream]
         '[java.nio.charset StandardCharsets])
 
+;; TODO: 無駄に fs/write-lines を利用している箇所を、spit に置き換える
+
 (def mgit-dir (fs/path ".mgit"))
 (def objects-dir (fs/path mgit-dir "objects"))
 (def refs-dir (fs/path mgit-dir "refs"))
