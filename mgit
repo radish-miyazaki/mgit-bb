@@ -1,10 +1,13 @@
 #!/usr/bin/env bb
 (require '[babashka.fs :as fs]
-         '[clojure.string :as str])
+         '[clojure.string :as str]
+         '[cheshire.core :as json])
 (import '[java.security MessageDigest]
         '[java.util.zip DeflaterOutputStream]
         '[java.io ByteArrayOutputStream]
         '[java.nio.charset StandardCharsets])
+
+;; TODO: 無駄に fs/write-lines を利用している箇所を、spit に置き換える
 
 (def mgit-dir (fs/path ".mgit"))
 (def objects-dir (fs/path mgit-dir "objects"))
@@ -49,6 +52,28 @@
    index-file
    (map (fn [[path hash]] (str path " " hash)) index)))
 
+(defn- resolve-ref [ref]
+  (-> ref
+      (str/split #":" 2)
+      second
+      str/trim))
+
+(defn- get-head-commit []
+  (when (fs/exists? head-file)
+    (let [ref (str/trim (slurp (str head-file)))]
+      (if (str/starts-with? ref "ref:")
+        (let [ref-path (fs/path mgit-dir (resolve-ref ref))]
+          (if (fs/exists? ref-path)
+            (str/trim (slurp (str ref-path)))
+            ""))
+        ref))))
+
+(defn- get-current-branch []
+  (let [ref (str/trim (slurp (str head-file)))]
+    (if (str/starts-with? ref "ref:")
+      (fs/file-name (resolve-ref ref))
+      nil)))
+
 (defmulti dispatch-command (fn [command _] command))
 
 (defmethod dispatch-command :default
@@ -72,13 +97,29 @@
     (println "Usage: mgit add <filename>")
     (let [fname (first args)]
       (if (fs/exists? fname)
-        (let [data (str/join "\n" (fs/read-all-lines fname))
+        (let [data (str/trim (slurp fname))
               hash (write-object data)
               index (read-index)
               new-index (assoc index fname hash)]
           (write-index new-index)
           (println (str "Added " fname " to index with hash " hash)))
         (eprintln (str "Error: " fname " does not exist."))))))
+
+(defmethod dispatch-command "commit" [_ args]
+  (if (empty? args)
+    (println "Usage: mgit commit <message>")
+    (let [index (read-index)]
+      (if (empty? index)
+        (println "Nothing to commit (index is empty).")
+        (let [message (first args)
+              parent (get-head-commit)
+              tree (json/generate-string index)
+              hash (write-object (str "tree " tree "\nparent " parent "\nmessage" message))
+              current-branch (get-current-branch)]
+          (if (nil? current-branch)
+            (fs/write-lines head-file [hash])
+            (fs/write-lines (fs/path heads-dir current-branch) [hash]))
+          (println (str "Committed as " hash)))))))
 
 (defn -main [& args]
   (when (empty? args)
