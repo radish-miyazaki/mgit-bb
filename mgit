@@ -3,8 +3,8 @@
          '[clojure.string :as str]
          '[cheshire.core :as json])
 (import '[java.security MessageDigest]
-        '[java.util.zip DeflaterOutputStream]
-        '[java.io ByteArrayOutputStream]
+        '[java.util.zip DeflaterOutputStream InflaterInputStream]
+        '[java.io ByteArrayOutputStream ByteArrayInputStream]
         '[java.nio.charset StandardCharsets])
 
 ;; TODO: 無駄に fs/write-lines を利用している箇所を、spit に置き換える
@@ -32,12 +32,29 @@
       (.write dos data))
     (.toByteArray boas)))
 
+(defn- zlib-decompress [bytes]
+  (let [boas (ByteArrayOutputStream.)
+        buffer (byte-array 1024)]
+    (with-open [iis (InflaterInputStream. (ByteArrayInputStream. bytes))]
+      (loop []
+        (let [n (.read iis buffer)]
+          (when (pos? n)
+            (.write boas buffer 0 n)
+            (recur)))))
+    (.toByteArray boas)))
+
 (defn- write-object [data]
   (let [hash (sha1 data)
         obj-path (fs/path objects-dir hash)]
     (when-not (fs/exists? obj-path)
       (fs/write-bytes obj-path (zlib-compress (.getBytes data StandardCharsets/UTF_8))))
     hash))
+
+(defn- read-object [hash]
+  (let [obj-path (fs/path objects-dir hash)]
+    (when-not (fs/exists? obj-path)
+      (throw (ex-info (str "Object " hash " does not exist") {:hash hash})))
+    (String. (zlib-decompress (fs/read-all-bytes obj-path)) StandardCharsets/UTF_8)))
 
 (defn- read-index []
   (if (fs/exists? index-file)
@@ -114,12 +131,31 @@
         (let [message (first args)
               parent (get-head-commit)
               tree (json/generate-string index)
-              hash (write-object (str "tree " tree "\nparent " parent "\nmessage" message))
+              hash (write-object (str "tree " tree "\nparent " parent "\nmessage " message))
               current-branch (get-current-branch)]
           (if (nil? current-branch)
             (fs/write-lines head-file [hash])
             (fs/write-lines (fs/path heads-dir current-branch) [hash]))
           (println (str "Committed as " hash)))))))
+
+(defmethod dispatch-command "log" [_ _]
+  (loop [commit-sha (get-head-commit)]
+    (when-not (str/blank? commit-sha)
+      (let [lines (str/split-lines (read-object commit-sha))
+            {:keys [parent message]}
+            (reduce (fn [acc line]
+                      (cond
+                        (str/starts-with? line "parent ")
+                        (assoc acc :parent (str/trim (subs line (count "parent "))))
+                        (str/starts-with? line "message ")
+                        (assoc acc :message (str/trim (subs line (count "message "))))
+                        :else acc))
+                    {:parent "" :message ""}
+                    lines)]
+        (println (str "commit " commit-sha))
+        (println (str "    " message))
+        (println)
+        (recur parent)))))
 
 (defn -main [& args]
   (when (empty? args)
