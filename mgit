@@ -91,6 +91,25 @@
       (fs/file-name (resolve-ref ref))
       nil)))
 
+(defn- create-branch [branch-name]
+  (let [head-commit (get-head-commit)
+        branch-file (fs/path heads-dir branch-name)]
+    (if (fs/exists? branch-file)
+      (println (str "Branch '" branch-name "' already exists."))
+      (do
+        (fs/write-lines branch-file [head-commit])
+        (println (str "Created branch '" branch-name "' at " head-commit))))))
+
+(defn- checkout [ref]
+  (let [branch-path (fs/path heads-dir ref)]
+    (if (fs/exists? branch-path)
+      (do
+        (fs/write-lines head-file [(str "ref: refs/heads/" ref)])
+        (println (str "Switched to branch '" ref "'")))
+      (do
+        (fs/write-lines head-file [ref])
+        (println (str "Note: switching to commit '" ref "' (detached HEAD)"))))))
+
 (defmulti dispatch-command (fn [command _] command))
 
 (defmethod dispatch-command :default
@@ -156,6 +175,16 @@
         (println (str "    " message))
         (println)
         (recur parent)))))
+
+(defmethod dispatch-command "branch" [_ args]
+  (if (empty? args)
+    (println "Usage: mgit branch <branch_name>")
+    (create-branch (first args))))
+
+(defmethod dispatch-command "checkout" [_ args]
+  (if (empty? args)
+    (println "Usage: mgit checkout <branch_or_commit>")
+    (checkout (first args))))
 
 (defn -main [& args]
   (when (empty? args)

@@ -16,6 +16,8 @@ and references the Erlang (escript) implementation [radish-miyazaki/mgit-escript
 - `add <filename>` - Stage a file to the index (computes SHA-1 hash, stores the object, and updates the index)
 - `commit <message>` - Create a commit from the current index (stores tree, parent, and message as an object, and updates the branch reference)
 - `log` - Show commit history by walking from HEAD through parent references
+- `branch <branch_name>` - Create a new branch that points at the current HEAD commit
+- `checkout <branch_or_commit>` - Move HEAD to a branch ref or detach it at a commit hash
 
 ## Usage
 
@@ -34,6 +36,15 @@ chmod +x mgit
 
 # Show commit history
 ./mgit log
+
+# Create a branch from the current commit
+./mgit branch feature
+
+# Switch to a branch
+./mgit checkout feature
+
+# Detach HEAD at a specific commit
+./mgit checkout <commit-hash>
 ```
 
 ## Repository Structure
